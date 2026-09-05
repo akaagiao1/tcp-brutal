@@ -2,15 +2,56 @@
 
 TCP Brutal is [Hysteria](https://hysteria.network/)'s congestion control algorithm ported to TCP, as a Linux kernel module. Information about Brutal itself can be found in the [Hysteria documentation](https://hysteria.network/docs/advanced/Full-Server-Config/#bandwidth-behavior-explained).
 
-As an official subproject of Hysteria, TCP Brutal is actively maintained to be in sync with the Brutal implementation in Hysteria.
+The upstream TCP Brutal project is an official Hysteria subproject. This fork adds Alpine installation support.
 
 **中文文档：[README.zh.md](README.zh.md)**
+
+
+## Alpine Linux installation (added in this fork)
+
+This is an Alpine adaptation of [HyNetworks/tcp-brutal](https://github.com/HyNetworks/tcp-brutal). The standalone Bash installer installs dependencies with apk, selects virt/lts kernel development packages, builds and loads the module, and enables OpenRC module loading at boot.
+
+Run as **root** on an Alpine VPS or physical host:
+
+```sh
+apk add --no-cache bash curl ca-certificates
+curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/alpine.sh -o alpine.sh
+bash alpine.sh
+```
+
+Requires Linux 5.10+ and development files matching the running kernel. This installer installs only the kernel module. To use the `brutalctl` examples below, run `make -C tools` from the complete source checkout, then `install -m 755 tools/brutalctl /usr/local/bin/brutalctl`.
+
+### Mismatched kernel development files
+
+If the running kernel is `6.18.38-0-virt` but apk installs development files for `6.18.48`, the installer stops. For the virt kernel:
+
+```sh
+apk upgrade linux-virt linux-virt-dev
+reboot
+```
+
+Reconnect, check `uname -r`, then rerun `bash alpine.sh`. For lts, use `linux-lts linux-lts-dev`. The installer does not upgrade or reboot the kernel automatically. Do not symlink mismatched development files.
+
+### Check, uninstall and kernel upgrades
+
+```sh
+lsmod | grep brutal
+modinfo brutal
+bash alpine.sh uninstall
+```
+
+Rerun installation after each kernel upgrade and reboot. If brutal is already loaded, stop applications using it and run `rmmod brutal` before reinstalling. For Docker/LXC, install the module on the host.
+
+**Validation:** [Alpine 3.24 x86_64 build passed](https://github.com/akaagiao1/tcp-brutal/actions/runs/33974912196), covering the virt kernel module and brutalctl with musl. Loading and throughput on the target VPS remain unverified. See [the detailed Chinese guide](ALPINE.zh.md).
+
+---
+
 
 > **New in v2:** TCP Brutal no longer needs special support from the application. Set a rate for a destination once, and every connection to it uses Brutal, any program, any TCP-based protocol. Stop waiting and use it right now!
 
 ## Quick start
 
-### Install
+### Upstream installer (other distributions)
 
 ```bash
 bash <(curl -fsSL https://tcp.hy2.sh/)

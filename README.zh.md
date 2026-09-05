@@ -2,15 +2,56 @@
 
 TCP Brutal 是 [Hysteria](https://hysteria.network/) 的 Brutal 拥塞控制算法在 TCP 上的实现，以 Linux 内核模块的形式提供。关于 Brutal 算法本身的详细说明，请参阅 [Hysteria 文档](https://hysteria.network/zh/docs/advanced/Full-Server-Config/#_6)。
 
-作为 Hysteria 的官方子项目，TCP Brutal 会持续维护，并与 Hysteria 中的 Brutal 实现保持同步。
+上游 TCP Brutal 是 Hysteria 的官方子项目；本 fork 增加 Alpine 安装适配。
 
 **English: [README.md](README.md)**
+
+
+## Alpine Linux 安装（本 fork 新增）
+
+本仓库是 [HyNetworks/tcp-brutal](https://github.com/HyNetworks/tcp-brutal) 的 Alpine 适配 fork。新增独立 Bash 安装入口，使用 apk 安装依赖、匹配 virt/lts 内核开发包、编译加载模块，并配置 OpenRC 开机加载。
+
+在 Alpine VPS/实体机上以 **root** 执行：
+
+```sh
+apk add --no-cache bash curl ca-certificates
+curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/alpine.sh -o alpine.sh
+bash alpine.sh
+```
+
+需要 Linux 5.10+ 和匹配当前内核的开发文件。此安装入口仅安装内核模块，不安装下文使用的 `brutalctl`；需要该工具时，在完整源码目录执行 `make -C tools`，然后执行 `install -m 755 tools/brutalctl /usr/local/bin/brutalctl`。
+
+### 内核版本不匹配
+
+例如运行 `6.18.38-0-virt`，但 apk 安装了 `6.18.48` 的开发文件，脚本会停止。virt 内核执行：
+
+```sh
+apk upgrade linux-virt linux-virt-dev
+reboot
+```
+
+重新连接 VPS 后运行 `uname -r` 确认已切换到匹配版本，再运行 `bash alpine.sh`。lts 内核使用 `linux-lts linux-lts-dev`。脚本不会自动升级内核或重启；不要用软链接伪造匹配的开发文件。
+
+### 检查、卸载和升级
+
+```sh
+lsmod | grep brutal
+modinfo brutal
+bash alpine.sh uninstall
+```
+
+每次升级内核并重启后，需要重新运行安装脚本。已加载 brutal 时，先停止使用它的应用，再执行 `rmmod brutal` 后重新安装。Docker/LXC 应在宿主机安装模块。
+
+**验证状态：** [Alpine 3.24 x86_64 编译检查通过](https://github.com/akaagiao1/tcp-brutal/actions/runs/33974912196)，包括 virt 内核模块和 musl 环境下的 brutalctl；尚未验证目标 VPS 实际加载及吞吐性能。更多说明见 [ALPINE.zh.md](ALPINE.zh.md)。
+
+---
+
 
 > **v2 新特性：** TCP Brutal 不再需要上层应用专门适配。只需为某个目标地址设置一次速率，任何程序、任何基于 TCP 的协议，所有连向该地址的连接都会自动使用 Brutal。不必哀求开发者支持，现在你就能用！
 
 ## 快速开始
 
-### 安装
+### 上游安装方式（其他发行版）
 
 ```bash
 bash <(curl -fsSL https://tcp.hy2.sh/)

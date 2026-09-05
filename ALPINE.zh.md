@@ -37,7 +37,7 @@ sh scripts/install_alpine.sh uninstall
 
 ## 验证范围
 
-已完成 shell 语法、帮助入口、非 Alpine 平台拒绝检查。附带 GitHub Actions 工作流在 Alpine 3.24 x86_64 环境中编译 linux-virt 模块和 brutalctl；交付时尚未运行此工作流，也尚未在目标 VPS 加载或测速。容器编译成功不能替代 VPS 实际加载验证。
+已完成 shell 语法、帮助入口、非 Alpine 平台拒绝检查。GitHub Actions 已在 Alpine 3.24 x86_64 环境中成功编译 linux-virt 模块和 brutalctl（运行 33974912196）；尚未在目标 VPS 加载或测速。容器编译成功不能替代 VPS 实际加载验证。
 
 ## 独立 Bash 安装入口
 
