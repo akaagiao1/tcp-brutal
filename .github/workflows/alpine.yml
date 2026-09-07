@@ -7,7 +7,8 @@ on:
       - '*.h'
       - 'Makefile'
       - 'tools/**'
-      - 'scripts/install_alpine.sh'
+      - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/alpine.yml'
   pull_request:
 permissions:
@@ -28,6 +29,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/src" -w /src alpine:3.24 sh -ec '
             apk add --no-cache build-base linux-virt-dev kmod bash
+            bash tests/alpine-inputs.sh
             bash -n scripts/alpine.sh
             bash scripts/alpine.sh --help
             sh -n scripts/install_alpine.sh

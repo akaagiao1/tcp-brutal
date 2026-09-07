@@ -204,3 +204,9 @@ Brutal needs to know the bandwidth, and most TCP proxy protocols have no way for
 make && make load   # kernel headers required, e.g. apt install linux-headers-$(uname -r)
 make -C tools       # brutalctl
 ```
+
+## Interactive rule setup
+
+After installation or tool repair, the bootstrap prompts for the client's public IPv4 and an integer bandwidth in Mbps, then adds and lists the rule. If Brutal v2 is already loaded, the default action repairs tools without rebuilding or unloading the module. Press Enter to skip. Noninteractive runs skip prompts. Use `bash alpine.sh configure` to configure later.
+
+Reconnect the client after adding a rule. Rules are not persisted across reboots; remove old rules when the client IP changes. The prompt currently supports IPv4 only.
