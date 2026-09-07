@@ -12,17 +12,40 @@ valid_ipv4() {
     (( 10#$octet <= 255 )) || return 1
   done
 }
+normalize_prefix() {
+  local input=$1 ip bits=32 number mask network
+  local -a octets
+  ip=${input%%/*}
+  if [[ $input == */* ]]; then bits=${input#*/}; fi
+  valid_ipv4 "$ip" || return 1
+  [[ $bits =~ ^(0|[1-9][0-9]?)$ ]] && (( bits <= 32 )) || return 1
+  IFS=. read -r -a octets <<< "$ip"
+  number=$(( (10#${octets[0]} << 24) | (10#${octets[1]} << 16) | (10#${octets[2]} << 8) | 10#${octets[3]} ))
+  mask=$(( (0xffffffff << (32-bits)) & 0xffffffff ))
+  network=$((number & mask))
+  printf '%d.%d.%d.%d/%d\n' "$(( (network >> 24) & 255 ))" "$(( (network >> 16) & 255 ))" "$(( (network >> 8) & 255 ))" "$((network & 255))" "$bits"
+}
+# Preserve the old bare-IP format for /32, and canonical CIDR for subnets.
+filter_saved_rule() {
+  local target=$1 ip rate extra prefix
+  [[ -f $RULES_DIR/rules.conf ]] || return 0
+  while read -r ip rate extra; do
+    [[ -n $ip ]] || continue
+    prefix=$(normalize_prefix "$ip") && valid_rate "$rate" && [[ -z $extra ]] || return 1
+    [[ $prefix == "$target" ]] || printf '%s %s\n' "${prefix%/32}" "$rate"
+  done < "$RULES_DIR/rules.conf"
+}
 valid_rate() {
   [[ $1 =~ ^[1-9][0-9]{0,6}$ ]] && (( 10#$1 <= 1000000 ))
 }
 configure_rule() {
   local client_ip rate
-  echo '配置 TCP Brutal：填写客户端本地网络的公网 IPv4，不是 VPS IP。'
+  echo '配置 TCP Brutal：填写客户端公网 IPv4 或 CIDR 网段，不是 VPS IP。网段内连接共享所填带宽。'
   while true; do
-    read -r -p '客户端公网 IPv4（回车跳过）：' client_ip || return 0
+    read -r -p '客户端公网 IPv4 或网段（回车跳过）：' client_ip || return 0
     [[ -n $client_ip ]] || return 0
-    valid_ipv4 "$client_ip" && break
-    echo 'IPv4 格式错误，请输入四段 0–255 的数字，不带端口或掩码。'
+    normalize_prefix "$client_ip" >/dev/null && break
+    echo '格式错误，例如 223.80.170.224 或 223.80.170.0/24；前缀长度为 0–32。'
   done
   while true; do
     read -r -p '带宽 Mbps（1–1000000 整数，按实际可用带宽填写；回车取消）：' rate || return 0
@@ -34,14 +57,14 @@ configure_rule() {
 }
 apply_rule() {
   local client_ip=$1 rate=$2
-  valid_ipv4 "$client_ip" && valid_rate "$rate" || { echo '无效的 IPv4 或 Mbps。' >&2; return 1; }
-  if ! /usr/local/bin/brutalctl add "$client_ip/32" "$rate"; then
+  client_ip=$(normalize_prefix "$client_ip") && valid_rate "$rate" || { echo '无效的 IPv4/CIDR 或 Mbps。' >&2; return 1; }
+  if ! /usr/local/bin/brutalctl add "$client_ip" "$rate"; then
     echo '添加失败，可能只写入了部分规则；请检查以下状态。' >&2
     /usr/local/bin/brutalctl list || true
     return 1
   fi
   /usr/local/bin/brutalctl list || return 1
-  echo "已设置 $client_ip/32，共享 $rate Mbps。请重新连接代理。"
+  echo "已设置 ${client_ip}，共享 $rate Mbps。请重新连接代理。"
   if save_rule "$client_ip" "$rate"; then
     echo '规则已保存，开机自动恢复。公网 IP 变化时请移除旧规则并重新配置。'
   else
@@ -63,21 +86,21 @@ prompt_configure() {
 show_rules() {
   echo '当前生效规则：'
   /usr/local/bin/brutalctl list || return 1
-  echo '开机恢复规则（IPv4 Mbps）：'
+  echo '开机恢复规则（IPv4/CIDR Mbps）：'
   if [[ -s $RULES_DIR/rules.conf ]]; then cat "$RULES_DIR/rules.conf"; else echo '（无）'; fi
 }
 delete_rule() {
   local client_ip=$1 current tmp
-  valid_ipv4 "$client_ip" || { echo '无效的 IPv4。' >&2; return 1; }
+  client_ip=$(normalize_prefix "$client_ip") || { echo '无效的 IPv4/CIDR。' >&2; return 1; }
   current=$(/usr/local/bin/brutalctl list) || return 1
   # Prepare the saved file before changing live state. Preserve other entries.
   install -d -m 700 "$RULES_DIR" || return 1
   tmp=$(mktemp "$RULES_DIR/rules.XXXXXX") || return 1
   if [[ -f $RULES_DIR/rules.conf ]]; then
-    awk -v ip="$client_ip" '$1 != ip' "$RULES_DIR/rules.conf" > "$tmp" || { rm -f "$tmp"; return 1; }
+    filter_saved_rule "$client_ip" > "$tmp" || { rm -f "$tmp"; return 1; }
   fi
-  if awk -v prefix="$client_ip/32" '$1 == prefix {found=1} END {exit !found}' <<< "$current"; then
-    if ! /usr/local/bin/brutalctl del "$client_ip/32"; then
+  if awk -v prefix="$client_ip" '$1 == prefix {found=1} END {exit !found}' <<< "$current"; then
+    if ! /usr/local/bin/brutalctl del "$client_ip"; then
       rm -f "$tmp"
       echo '当前规则删除失败，保存的配置未修改。' >&2
       return 1
@@ -93,14 +116,14 @@ delete_rule() {
 prompt_delete() {
   local client_ip
   show_rules || return 1
-  read -r -p '要删除的客户端公网 IPv4（回车取消）：' client_ip || return 0
+  read -r -p '要删除的客户端公网 IPv4 或网段（回车取消）：' client_ip || return 0
   [[ -n $client_ip ]] || return 0
   delete_rule "$client_ip"
 }
 rule_menu() {
   local choice
   while true; do
-    printf '\n1) 添加公网 IP / 修改已有 IP 的带宽\n2) 删除公网 IP 和带宽规则\n3) 查看当前及开机规则\n0) 退出\n'
+    printf '\n1) 添加公网 IP/网段或修改带宽\n2) 删除公网 IP/网段和带宽规则\n3) 查看当前及开机规则\n0) 退出\n'
     read -r -p '请选择：' choice || return 0
     case "$choice" in
       1) configure_rule || echo '操作失败，请检查上面的错误。' ;;
@@ -176,8 +199,8 @@ restore_rules() {
   [[ -f $RULES_DIR/rules.conf ]] || return 0
   while read -r ip rate extra; do
     [[ -n $ip ]] || continue
-    valid_ipv4 "$ip" && valid_rate "$rate" && [[ -z $extra ]] || return 1
-    /usr/local/bin/brutalctl add "$ip/32" "$rate" || return 1
+    ip=$(normalize_prefix "$ip") && valid_rate "$rate" && [[ -z $extra ]] || return 1
+    /usr/local/bin/brutalctl add "$ip" "$rate" || return 1
   done < $RULES_DIR/rules.conf
 }
 setup_boot() {
@@ -220,19 +243,20 @@ UNIT
 }
 save_rule() {
   local ip=$1 rate=$2 tmp
+  ip=$(normalize_prefix "$ip") && valid_rate "$rate" || return 1
   setup_boot || return 1
   install -d -m 700 "$RULES_DIR" || return 1
   tmp=$(mktemp "$RULES_DIR/rules.XXXXXX") || return 1
   if [[ -f $RULES_DIR/rules.conf ]]; then
-    awk -v ip="$ip" '$1 != ip' "$RULES_DIR/rules.conf" > "$tmp" || { rm -f "$tmp"; return 1; }
+    filter_saved_rule "$ip" > "$tmp" || { rm -f "$tmp"; return 1; }
   fi
-  printf '%s %s\n' "$ip" "$rate" >> "$tmp" || { rm -f "$tmp"; return 1; }
+  printf '%s %s\n' "${ip%/32}" "$rate" >> "$tmp" || { rm -f "$tmp"; return 1; }
   chmod 600 "$tmp" && mv "$tmp" "$RULES_DIR/rules.conf" || { rm -f "$tmp"; return 1; }
 }
 main() {
   local action=${1:-auto} family rpm_manager kernel major rest minor
   case "$action" in
-    help|-h|--help) echo 'Usage: bash install.sh [install|tools|configure|menu|list|add IP Mbps|delete IP|restore]'; return ;;
+    help|-h|--help) echo 'Usage: bash install.sh [install|tools|configure|menu|list|add IP/CIDR Mbps|delete IP|restore]'; return ;;
     auto|install|tools|configure|menu|list|add|delete|restore) ;;
     *) echo 'Unknown action. Use --help.' >&2; return 2 ;;
   esac
@@ -244,8 +268,8 @@ main() {
     if [[ -x /usr/local/bin/brutalctl && -r /proc/net/tcp_brutal/rules ]]; then action=menu; else action=install; fi
   fi
   case "$action" in
-    add) [[ $# == 3 ]] || { echo 'Usage: bash install.sh add IP Mbps'; return 2; }; apply_rule "$2" "$3"; return ;;
-    delete) [[ $# == 2 ]] || { echo 'Usage: bash install.sh delete IP'; return 2; }; delete_rule "$2"; return ;;
+    add) [[ $# == 3 ]] || { echo 'Usage: bash install.sh add IP/CIDR Mbps'; return 2; }; apply_rule "$2" "$3"; return ;;
+    delete) [[ $# == 2 ]] || { echo 'Usage: bash install.sh delete IP/CIDR'; return 2; }; delete_rule "$2"; return ;;
     list) show_rules; return ;;
     menu) prompt_configure; return ;;
   esac

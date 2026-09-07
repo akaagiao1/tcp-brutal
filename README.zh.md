@@ -29,7 +29,7 @@ curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/i
 bash install.sh
 ```
 
-脚本安装模块、brutalctl 和完整 iproute 工具。检测到 v2 已加载时只补齐工具。安装成功后填写客户端公网 IPv4 和带宽（Mbps），添加规则并保存到 `/etc/tcp-brutal/rules.conf`。Alpine 的 OpenRC 服务或其他发行版的 systemd 服务会在开机时恢复规则；不是自动恢复旧脚本从未保存的规则，需要用新入口填写一次。
+脚本安装模块、brutalctl 和完整 iproute 工具。检测到 v2 已加载时只补齐工具。安装成功后填写客户端公网 IPv4 或 CIDR 网段和带宽（Mbps），添加规则并保存到 `/etc/tcp-brutal/rules.conf`。Alpine 的 OpenRC 服务或其他发行版的 systemd 服务会在开机时恢复规则；不是自动恢复旧脚本从未保存的规则，需要用新入口填写一次。
 
 ```sh
 bash install.sh tools      # 只补装工具，随后提示填写规则
@@ -39,8 +39,8 @@ brutalctl list
 
 已安装后直接运行 `bash install.sh` 会进入菜单，不再重复安装依赖：
 
-1. 添加公网 IP / 修改已有 IP 的带宽
-2. 删除公网 IP 和带宽规则
+1. 添加公网 IP/网段或修改带宽
+2. 删除公网 IP/网段和带宽规则
 3. 查看当前及开机规则
 0. 退出
 
@@ -54,6 +54,19 @@ bash install.sh add 223.80.170.224 40  # 将该 IP 改为 40 Mbps
 bash install.sh delete 223.80.170.224
 bash install.sh list
 ```
+
+### 网段（CIDR）支持
+
+`223.80.170.224/32` 只匹配一个 IP。`223.80.170.0/24` 匹配 `223.80.170.0` 至 `223.80.170.255`；该规则匹配的连接共享所填带宽，不是每个 IP 各自获得一份。
+
+```sh
+bash install.sh add 223.80.170.0/24 50
+bash install.sh delete 223.80.170.0/24
+```
+
+菜单同样支持 CIDR。输入 `223.80.170.224/24` 会自动规范化为 `223.80.170.0/24`，裸 IP 按 `/32` 处理。支持 `/0` 至 `/32`，但不会自动扩大范围；`/0` 会覆盖所有 IPv4 目标，应明确了解范围后再使用。运营商换 IP 时不保证仍落在同一 `/24`。
+
+规则重叠时最长前缀优先：旧 `/32` 仍会优先于新 `/24`；如要改用网段规则，应明确删除不再需要的旧 `/32`。添加网段不会自动删除已有单 IP 规则。旧版保存的裸 IP 配置仍能读取、更新、删除和开机恢复。
 
 ### 开机恢复
 

@@ -12,6 +12,7 @@ install_tools
 bash tests/alpine-inputs.sh
 bash tests/persistence.sh
 bash tests/manage-rules.sh
+bash tests/cidr.sh
 case "$family" in
   alpine) packages linux-virt-dev ;;
   debian) packages linux-headers-amd64 libelf-dev ;;

@@ -18,13 +18,17 @@ curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/i
 bash install.sh
 ```
 
-Installs the module, brutalctl and full iproute tools. A loaded v2 module is reused. Successful installation prompts for client public IPv4 and Mbps, applies the rule, and saves it in `/etc/tcp-brutal/rules.conf`. OpenRC (Alpine) or systemd restores saved rules at boot. Run the new configuration step once to save rules from older installations.
+Installs the module, brutalctl and full iproute tools. A loaded v2 module is reused. Successful installation prompts for client public IPv4 or CIDR and Mbps, applies the rule, and saves it in `/etc/tcp-brutal/rules.conf`. OpenRC (Alpine) or systemd restores saved rules at boot. Run the new configuration step once to save rules from older installations.
 
 Use `bash install.sh tools` to repair tools, or `bash install.sh configure` to open the rule menu. With the module and tool already available, running without arguments opens the menu instead of reinstalling. Enter skips prompts; unattended execution skips configuration. Same-IP entries update, other entries are retained. Reconnect clients after adding rules.
 
 Use `bash install.sh add IP Mbps` to add/update, `bash install.sh delete IP` to remove both the live and saved rule, and `bash install.sh list` to view both. The menu provides the same operations. Deleting does not interrupt existing TCP connections; reconnect to stop using their old parameters. Check for duplicate rules in an older manually created `/etc/local.d/brutal-rules.start` when migrating. Service: `tcp-brutal-rules` (systemctl / rc-service).
 
 Kernel upgrades still require rerunning installation to build the module for the new kernel; this installer does not use DKMS or automatically upgrade/reboot. Rule persistence does not rebuild modules. Container tests cover dependencies, builds and rule logic; real VPS loading/reboot/throughput remain separate verification. See [Linux CI](https://github.com/akaagiao1/tcp-brutal/actions/workflows/linux.yml) and [Chinese instructions](README.zh.md).
+
+IPv4 CIDR is supported throughout add, update, delete and boot restoration. `223.80.170.224/32` matches one address; `223.80.170.0/24` covers 256 addresses whose matching connections share the configured rate. Host bits are normalized (`223.80.170.224/24` becomes `223.80.170.0/24`). Bare IPv4 remains a /32, and legacy saved entries remain compatible.
+
+Example: `bash install.sh add 223.80.170.0/24 50`. Overlapping rules use longest-prefix matching; remove an old /32 explicitly if replacing it with a /24. An ISP address change is not guaranteed to remain within that subnet. /0 matches all IPv4 destinations; the script never expands a prefix automatically.
 
 ---
 
