@@ -31,7 +31,7 @@ jobs:
             apk add --no-cache build-base linux-virt-dev kmod bash
             bash tests/alpine-inputs.sh
             bash -n scripts/alpine.sh
-            bash scripts/alpine.sh --help
+            bash scripts/install.sh --help
             sh -n scripts/install_alpine.sh
             sh scripts/install_alpine.sh --help
             set -- /lib/modules/*-virt/build

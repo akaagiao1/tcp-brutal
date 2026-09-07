@@ -7,45 +7,26 @@ The upstream TCP Brutal project is an official Hysteria subproject. This fork ad
 **中文文档：[README.zh.md](README.zh.md)**
 
 
-## Alpine Linux installation (added in this fork)
+## Cross-distribution installer (this fork)
 
-This is an Alpine adaptation of [HyNetworks/tcp-brutal](https://github.com/HyNetworks/tcp-brutal). The standalone Bash installer installs dependencies with apk, selects virt/lts kernel development packages, builds and loads the module, and enables OpenRC module loading at boot.
+Supports Alpine, Debian/Ubuntu and CentOS/RHEL/Rocky/AlmaLinux using apk, apt-get or dnf/yum. Linux **5.10+**, matching kernel development files and permission to load modules are required. Stock CentOS 7/8 kernels are too old for v2.
 
-Run as **root** on an Alpine VPS or physical host:
-
-```sh
-apk add --no-cache bash curl ca-certificates
-curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/alpine.sh -o alpine.sh
-bash alpine.sh
-```
-
-Requires Linux 5.10+ and development files matching the running kernel. The installer installs the module, `brutalctl`, and full iproute2. To add the tool without unloading the existing module, download the latest `alpine.sh` and run `bash alpine.sh tools`.
-
-### Mismatched kernel development files
-
-If the running kernel is `6.18.38-0-virt` but apk installs development files for `6.18.48`, the installer stops. For the virt kernel:
+Install Bash, curl and CA certificates with your package manager, then run as root:
 
 ```sh
-apk upgrade linux-virt linux-virt-dev
-reboot
+curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/install.sh -o install.sh
+bash install.sh
 ```
 
-Reconnect, check `uname -r`, then rerun `bash alpine.sh`. For lts, use `linux-lts linux-lts-dev`. The installer does not upgrade or reboot the kernel automatically. Do not symlink mismatched development files.
+Installs the module, brutalctl and full iproute tools. A loaded v2 module is reused. Successful installation prompts for client public IPv4 and Mbps, applies the rule, and saves it in `/etc/tcp-brutal/rules.conf`. OpenRC (Alpine) or systemd restores saved rules at boot. Run the new configuration step once to save rules from older installations.
 
-### Check, uninstall and kernel upgrades
+Use `bash install.sh tools` to repair tools, or `bash install.sh configure` to add/update rules later. Enter skips prompts; unattended execution skips configuration. Same-IP entries update, other entries are retained. Reconnect clients after adding rules.
 
-```sh
-lsmod | grep brutal
-modinfo brutal
-bash alpine.sh uninstall
-```
+Use `brutalctl del OLD_IP/32` and remove that IP line from the saved file to remove a persistent rule. Check for duplicate rules in an older manually created `/etc/local.d/brutal-rules.start` when migrating. Service: `tcp-brutal-rules` (systemctl / rc-service).
 
-Rerun installation after each kernel upgrade and reboot. If brutal is already loaded, stop applications using it and run `rmmod brutal` before reinstalling. For Docker/LXC, install the module on the host.
-
-**Validation:** [Alpine 3.24 x86_64 build passed](https://github.com/akaagiao1/tcp-brutal/actions/runs/33974912196), covering the virt kernel module and brutalctl with musl. Loading and throughput on the target VPS remain unverified. See [the detailed Chinese guide](ALPINE.zh.md).
+Kernel upgrades still require rerunning installation to build the module for the new kernel; this installer does not use DKMS or automatically upgrade/reboot. Rule persistence does not rebuild modules. Container tests cover dependencies, builds and rule logic; real VPS loading/reboot/throughput remain separate verification. See [Linux CI](https://github.com/akaagiao1/tcp-brutal/actions/workflows/linux.yml) and [Chinese instructions](README.zh.md).
 
 ---
-
 
 > **New in v2:** TCP Brutal no longer needs special support from the application. Set a rate for a destination once, and every connection to it uses Brutal, any program, any TCP-based protocol. Stop waiting and use it right now!
 
@@ -204,9 +185,3 @@ Brutal needs to know the bandwidth, and most TCP proxy protocols have no way for
 make && make load   # kernel headers required, e.g. apt install linux-headers-$(uname -r)
 make -C tools       # brutalctl
 ```
-
-## Interactive rule setup
-
-After installation or tool repair, the bootstrap prompts for the client's public IPv4 and an integer bandwidth in Mbps, then adds and lists the rule. If Brutal v2 is already loaded, the default action repairs tools without rebuilding or unloading the module. Press Enter to skip. Noninteractive runs skip prompts. Use `bash alpine.sh configure` to configure later.
-
-Reconnect the client after adding a rule. Rules are not persisted across reboots; remove old rules when the client IP changes. The prompt currently supports IPv4 only.

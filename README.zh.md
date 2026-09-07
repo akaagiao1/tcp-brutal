@@ -7,45 +7,60 @@ TCP Brutal 是 [Hysteria](https://hysteria.network/) 的 Brutal 拥塞控制算�
 **English: [README.md](README.md)**
 
 
-## Alpine Linux 安装（本 fork 新增）
+## Linux 通用安装（本 fork 新增）
 
-本仓库是 [HyNetworks/tcp-brutal](https://github.com/HyNetworks/tcp-brutal) 的 Alpine 适配 fork。新增独立 Bash 安装入口，使用 apk 安装依赖、匹配 virt/lts 内核开发包、编译加载模块，并配置 OpenRC 开机加载。
+支持 Alpine、Debian/Ubuntu、CentOS/RHEL/Rocky/AlmaLinux 系列，使用对应的 apk、apt-get、dnf/yum 安装依赖。**Brutal v2 要求 Linux 5.10+**；CentOS 7/8 的原生旧内核不满足要求。需要允许加载内核模块的 VPS/实体机；容器应在宿主机安装。
 
-在 Alpine VPS/实体机上以 **root** 执行：
+先准备 Bash 和 curl（以 root 按系统执行一条）：
 
 ```sh
+# Alpine
 apk add --no-cache bash curl ca-certificates
-curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/alpine.sh -o alpine.sh
-bash alpine.sh
+# Debian / Ubuntu
+apt-get update && apt-get install -y bash curl ca-certificates
+# CentOS / RHEL 系
+yum install -y bash curl ca-certificates
 ```
 
-需要 Linux 5.10+ 和匹配当前内核的开发文件。安装入口会同时安装内核模块、`brutalctl` 和完整的 iproute2。已经加载模块、只需补装工具时，重新下载最新版 `alpine.sh` 后执行 `bash alpine.sh tools`，无需卸载模块或重启。
-
-### 内核版本不匹配
-
-例如运行 `6.18.38-0-virt`，但 apk 安装了 `6.18.48` 的开发文件，脚本会停止。virt 内核执行：
+然后以 root 执行通用入口：
 
 ```sh
-apk upgrade linux-virt linux-virt-dev
-reboot
+curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/install.sh -o install.sh
+bash install.sh
 ```
 
-重新连接 VPS 后运行 `uname -r` 确认已切换到匹配版本，再运行 `bash alpine.sh`。lts 内核使用 `linux-lts linux-lts-dev`。脚本不会自动升级内核或重启；不要用软链接伪造匹配的开发文件。
-
-### 检查、卸载和升级
+脚本安装模块、brutalctl 和完整 iproute 工具。检测到 v2 已加载时只补齐工具。安装成功后填写客户端公网 IPv4 和带宽（Mbps），添加规则并保存到 `/etc/tcp-brutal/rules.conf`。Alpine 的 OpenRC 服务或其他发行版的 systemd 服务会在开机时恢复规则；不是自动恢复旧脚本从未保存的规则，需要用新入口填写一次。
 
 ```sh
-lsmod | grep brutal
-modinfo brutal
-bash alpine.sh uninstall
+bash install.sh tools      # 只补装工具，随后提示填写规则
+bash install.sh configure  # 已安装后添加/更新规则并保存
+brutalctl list
 ```
 
-每次升级内核并重启后，需要重新运行安装脚本。已加载 brutal 时，先停止使用它的应用，再执行 `rmmod brutal` 后重新安装。Docker/LXC 应在宿主机安装模块。
+同一 IP 重复配置会更新速率，不同 IP 会保留多条规则。回车跳过填写；非交互运行跳过填写。添加后重新连接代理。
 
-**验证状态：** [Alpine 3.24 x86_64 编译检查通过](https://github.com/akaagiao1/tcp-brutal/actions/runs/33974912196)，包括 virt 内核模块和 musl 环境下的 brutalctl；尚未验证目标 VPS 实际加载及吞吐性能。更多说明见 [ALPINE.zh.md](ALPINE.zh.md)。
+### 开机恢复与删除规则
+
+```sh
+# Debian / Ubuntu / CentOS / RHEL 系
+systemctl status tcp-brutal-rules
+# Alpine
+rc-service tcp-brutal-rules status
+```
+
+客户端公网 IP 变化时，使用 `brutalctl del 旧IP/32` 删除当前旧规则，并编辑 `/etc/tcp-brutal/rules.conf` 删除旧 IP 那一行，再配置新 IP。每行是 `IPv4 Mbps`，不是 shell 命令。
+
+旧版手动添加的 `/etc/local.d/brutal-rules.start` 不会被脚本删除；迁移完成后请检查并移除其中重复的 Brutal 规则，避免两个入口重复应用旧值。
+
+### 内核匹配和升级
+
+模块按当前内核编译，开发文件必须完全匹配：Alpine 使用 linux-virt-dev / linux-lts-dev，Debian 系使用 linux-headers-当前版本，RHEL 系使用 kernel-devel-当前版本。仓库找不到匹配版本时，先更新内核和开发包、重启再安装，不要创建假软链接。脚本不自动升级内核或重启。
+
+**内核升级后仍需要重新运行安装脚本编译模块**；规则持久化不能替代为新内核编译模块。本入口不依赖 DKMS，不自动重建模块。系统启动服务不可用时会明确报错，不会声称规则已持久化。
+
+验证覆盖：输入校验、保存/更新/恢复规则和发行版依赖/编译检查；容器检查不能替代目标 VPS 的模块加载、重启和吞吐验证。参见 [Linux 检查](https://github.com/akaagiao1/tcp-brutal/actions/workflows/linux.yml)。
 
 ---
-
 
 > **v2 新特性：** TCP Brutal 不再需要上层应用专门适配。只需为某个目标地址设置一次速率，任何程序、任何基于 TCP 的协议，所有连向该地址的连接都会自动使用 Brutal。不必哀求开发者支持，现在你就能用！
 
@@ -319,15 +334,3 @@ make && make load   # 需要安装内核头文件，例如：
 
 make -C tools       # 编译 brutalctl
 ```
-
-## 安装后交互配置
-
-最新版 `bash alpine.sh` 检测到 Brutal v2 已加载时会直接补装工具；新安装或补装完成且 v2 规则接口可用后，会提示填写**客户端公网 IPv4**和带宽（Mbps 正整数）。例如填写 `223.80.170.224` 和 `50`，会添加该地址的 50 Mbps 规则并显示规则列表。回车可以跳过；非交互运行会跳过提示。
-
-已经安装完成，只配置规则：
-
-```sh
-bash alpine.sh configure
-```
-
-添加后重新连接代理。规则不自动持久化，重启后需重新配置；客户端公网 IP 变化后需删除旧规则再添加新规则。当前交互入口支持 IPv4。脚本不会自动识别公网 IP，也不会填写 VPS 出口 IP。
