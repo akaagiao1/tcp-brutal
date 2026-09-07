@@ -19,7 +19,7 @@ curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/a
 bash alpine.sh
 ```
 
-Requires Linux 5.10+ and development files matching the running kernel. This installer installs only the kernel module. To use the `brutalctl` examples below, run `make -C tools` from the complete source checkout, then `install -m 755 tools/brutalctl /usr/local/bin/brutalctl`.
+Requires Linux 5.10+ and development files matching the running kernel. The installer installs the module, `brutalctl`, and full iproute2. To add the tool without unloading the existing module, download the latest `alpine.sh` and run `bash alpine.sh tools`.
 
 ### Mismatched kernel development files
 

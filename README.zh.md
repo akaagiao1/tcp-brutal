@@ -19,7 +19,7 @@ curl -fL https://raw.githubusercontent.com/akaagiao1/tcp-brutal/master/scripts/a
 bash alpine.sh
 ```
 
-需要 Linux 5.10+ 和匹配当前内核的开发文件。此安装入口仅安装内核模块，不安装下文使用的 `brutalctl`；需要该工具时，在完整源码目录执行 `make -C tools`，然后执行 `install -m 755 tools/brutalctl /usr/local/bin/brutalctl`。
+需要 Linux 5.10+ 和匹配当前内核的开发文件。安装入口会同时安装内核模块、`brutalctl` 和完整的 iproute2。已经加载模块、只需补装工具时，重新下载最新版 `alpine.sh` 后执行 `bash alpine.sh tools`，无需卸载模块或重启。
 
 ### 内核版本不匹配
 

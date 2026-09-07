@@ -33,7 +33,7 @@ sh scripts/install_alpine.sh uninstall
 
 卸载仅移除当前内核版本的模块和 brutal 开机加载配置；不移除编译依赖，也不关闭系统 modules 服务。
 
-本安装器仅安装内核模块。按原项目文档配置支持 TCP Brutal 的应用及带宽；不修改默认拥塞控制。需要 v2 的 brutalctl 管理工具时，可以另行 `make -C tools` 编译。
+本安装器安装内核模块、brutalctl 和完整 iproute2。v2 可以通过目标地址规则启用，不需要修改代理程序；不修改默认拥塞控制。补装工具：下载最新版 alpine.sh 后执行 `bash alpine.sh tools`，无需卸载模块。卸载模块时保留管理工具及其依赖。
 
 ## 验证范围
 

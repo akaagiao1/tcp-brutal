@@ -3,10 +3,10 @@
 set -euo pipefail
 case "${1:-install}" in
   help|-h|--help)
-    echo 'Usage: bash alpine.sh [install|uninstall]'
+    echo 'Usage: bash alpine.sh [install|tools|uninstall]'
     exit 0 ;;
-  install|uninstall) action=${1:-install} ;;
-  *) echo 'Usage: bash alpine.sh [install|uninstall]' >&2; exit 2 ;;
+  install|tools|uninstall) action=${1:-install} ;;
+  *) echo 'Usage: bash alpine.sh [install|tools|uninstall]' >&2; exit 2 ;;
 esac
 [[ $(uname -s) == Linux && -f /etc/alpine-release ]] || { echo 'Requires Alpine Linux.' >&2; exit 1; }
 [[ $EUID == 0 ]] || { echo 'Run as root.' >&2; exit 1; }

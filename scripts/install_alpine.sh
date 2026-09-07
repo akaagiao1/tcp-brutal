@@ -3,8 +3,8 @@
 set -eu
 fail() { printf '%s\n' "Error: $*" >&2; exit 1; }
 case "${1:-install}" in
-  -h|--help|help) echo "Usage: sh scripts/install_alpine.sh [install|uninstall]"; exit 0 ;;
-  install|uninstall) action=${1:-install} ;;
+  -h|--help|help) echo "Usage: sh scripts/install_alpine.sh [install|tools|uninstall]"; exit 0 ;;
+  install|tools|uninstall) action=${1:-install} ;;
   *) fail "Unknown action: $1" ;;
 esac
 [ "$(uname -s)" = Linux ] && [ -f /etc/alpine-release ] || fail 'Alpine Linux is required.'
@@ -23,6 +23,16 @@ if [ "$action" = uninstall ]; then
 fi
 src=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 [ -f "$src/brutal.h" ] || fail 'Run this script from the complete source checkout.'
+# The userspace tool also needs full iproute2 (BusyBox ip lacks congctl).
+apk add --no-cache build-base iproute2
+make -C "$src/tools" clean
+make -C "$src/tools"
+mkdir -p /usr/local/bin
+install -m 755 "$src/tools/brutalctl" /usr/local/bin/brutalctl
+if [ "$action" = tools ]; then
+  echo 'Installed brutalctl to /usr/local/bin/brutalctl. The loaded module is unchanged.'
+  exit 0
+fi
 major=${kernel%%.*}
 rest=${kernel#*.}
 minor=${rest%%.*}

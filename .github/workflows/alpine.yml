@@ -17,6 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install userspace tools without kernel headers
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src alpine:3.24 sh -ec '
+            sh scripts/install_alpine.sh tools
+            test -x /usr/local/bin/brutalctl
+            apk info -e iproute2
+          '
       - name: Compile with Alpine virt kernel headers and musl
         run: |
           docker run --rm -v "$PWD:/src" -w /src alpine:3.24 sh -ec '
