@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname "$0")/../scripts/install.sh"
-[[ $(normalize_prefix 223.80.170.224) == 223.80.170.224/32 ]]
+[[ $(normalize_prefix 223.80.170.224) == 223.80.170.0/24 ]]
+[[ $(normalize_saved_prefix 223.80.170.224) == 223.80.170.224/32 ]]
 [[ $(normalize_prefix 223.80.170.224/24) == 223.80.170.0/24 ]]
 [[ $(normalize_prefix 223.80.170.224/16) == 223.80.0.0/16 ]]
 [[ $(normalize_prefix 223.80.170.224/0) == 0.0.0.0/0 ]]
@@ -19,7 +20,7 @@ modprobe() { :; }
 }
 echo '223.80.170.224 50' > "$RULES_DIR/rules.conf"
 save_rule 223.80.170.224/32 40
-[[ $(cat "$RULES_DIR/rules.conf") == '223.80.170.224 40' ]]
+[[ $(cat "$RULES_DIR/rules.conf") == '223.80.170.224/32 40' ]]
 apply_rule 223.80.170.224/24 50
 apply_rule 223.80.170.1/24 30
 [[ $(wc -l < "$RULES_DIR/rules.conf") -eq 2 ]]
@@ -27,6 +28,6 @@ grep -qx '223.80.170.0/24 30' "$RULES_DIR/rules.conf"
 restore_rules
 grep -qx 'add 223.80.170.0/24 30' "$RULES_DIR/commands"
 delete_rule 223.80.170.99/24
-[[ $(cat "$RULES_DIR/rules.conf") == '223.80.170.224 40' ]]
+[[ $(cat "$RULES_DIR/rules.conf") == '223.80.170.224/32 40' ]]
 grep -qx 'del 223.80.170.0/24' "$RULES_DIR/commands"
 echo 'CIDR normalization, update, restore and deletion passed.'

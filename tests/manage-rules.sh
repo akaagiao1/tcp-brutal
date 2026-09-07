@@ -11,27 +11,27 @@ setup_boot() { :; }
     add) echo "$2 $3" >> "$RULES_DIR/added" ;;
   esac
 }
-apply_rule 223.80.170.224 50
-apply_rule 1.1.1.1 20
-apply_rule 1.1.1.1 30
+apply_rule 223.80.170.224/32 50
+apply_rule 1.1.1.1/32 20
+apply_rule 1.1.1.1/32 30
 [[ $(wc -l < "$RULES_DIR/rules.conf") -eq 2 ]]
-grep -qx '1.1.1.1 30' "$RULES_DIR/rules.conf"
-delete_rule 223.80.170.224
+grep -qx '1.1.1.1/32 30' "$RULES_DIR/rules.conf"
+delete_rule 223.80.170.224/32
 grep -qx '223.80.170.224/32' "$RULES_DIR/deleted"
-[[ $(cat "$RULES_DIR/rules.conf") == '1.1.1.1 30' ]]
+[[ $(cat "$RULES_DIR/rules.conf") == '1.1.1.1/32 30' ]]
 # Saved-only deletion works even after reboot before restoration.
-delete_rule 1.1.1.1
+delete_rule 1.1.1.1/32
 [[ ! -s $RULES_DIR/rules.conf ]]
 [[ $(wc -l < "$RULES_DIR/deleted") -eq 1 ]]
-save_rule 223.80.170.224 50
+save_rule 223.80.170.224/32 50
 /usr/local/bin/brutalctl() {
   case "$1" in
     list) echo '223.80.170.224/32 50' ;;
     del) return 1 ;;
   esac
 }
-if delete_rule 223.80.170.224; then exit 1; fi
-grep -qx '223.80.170.224 50' "$RULES_DIR/rules.conf"
+if delete_rule 223.80.170.224/32; then exit 1; fi
+grep -qx '223.80.170.224/32 50' "$RULES_DIR/rules.conf"
 if delete_rule '1.1.1.1;id'; then exit 1; fi
 # The menu dispatches multiple operations, then exits without installing packages.
 configure_rule() { echo menu-add; }

@@ -13,7 +13,7 @@ valid_ipv4() {
   done
 }
 normalize_prefix() {
-  local input=$1 ip bits=32 number mask network
+  local input=$1 ip bits=24 number mask network
   local -a octets
   ip=${input%%/*}
   if [[ $input == */* ]]; then bits=${input#*/}; fi
@@ -25,14 +25,20 @@ normalize_prefix() {
   network=$((number & mask))
   printf '%d.%d.%d.%d/%d\n' "$(( (network >> 24) & 255 ))" "$(( (network >> 16) & 255 ))" "$(( (network >> 8) & 255 ))" "$((network & 255))" "$bits"
 }
-# Preserve the old bare-IP format for /32, and canonical CIDR for subnets.
+normalize_saved_prefix() {
+  local input=$1
+  # Files written by releases before CIDR-by-default stored /32 rules as bare IPs.
+  # Preserve that meaning while all newly saved rules use explicit CIDR.
+  [[ $input == */* ]] || input="$input/32"
+  normalize_prefix "$input"
+}
 filter_saved_rule() {
   local target=$1 ip rate extra prefix
   [[ -f $RULES_DIR/rules.conf ]] || return 0
   while read -r ip rate extra; do
     [[ -n $ip ]] || continue
-    prefix=$(normalize_prefix "$ip") && valid_rate "$rate" && [[ -z $extra ]] || return 1
-    [[ $prefix == "$target" ]] || printf '%s %s\n' "${prefix%/32}" "$rate"
+    prefix=$(normalize_saved_prefix "$ip") && valid_rate "$rate" && [[ -z $extra ]] || return 1
+    [[ $prefix == "$target" ]] || printf '%s %s\n' "$prefix" "$rate"
   done < "$RULES_DIR/rules.conf"
 }
 valid_rate() {
@@ -199,7 +205,7 @@ restore_rules() {
   [[ -f $RULES_DIR/rules.conf ]] || return 0
   while read -r ip rate extra; do
     [[ -n $ip ]] || continue
-    ip=$(normalize_prefix "$ip") && valid_rate "$rate" && [[ -z $extra ]] || return 1
+    ip=$(normalize_saved_prefix "$ip") && valid_rate "$rate" && [[ -z $extra ]] || return 1
     /usr/local/bin/brutalctl add "$ip" "$rate" || return 1
   done < $RULES_DIR/rules.conf
 }
@@ -250,7 +256,7 @@ save_rule() {
   if [[ -f $RULES_DIR/rules.conf ]]; then
     filter_saved_rule "$ip" > "$tmp" || { rm -f "$tmp"; return 1; }
   fi
-  printf '%s %s\n' "${ip%/32}" "$rate" >> "$tmp" || { rm -f "$tmp"; return 1; }
+  printf '%s %s\n' "$ip" "$rate" >> "$tmp" || { rm -f "$tmp"; return 1; }
   chmod 600 "$tmp" && mv "$tmp" "$RULES_DIR/rules.conf" || { rm -f "$tmp"; return 1; }
 }
 main() {

@@ -12,7 +12,7 @@ done
 # Mock only the command, so no route or host configuration is changed.
 /usr/local/bin/brutalctl() {
   if [[ $1 == add ]]; then
-    [[ $2 == 223.80.170.224/32 && $3 == 50 ]] || return 1
+    [[ $2 == 223.80.170.0/24 && $3 == 50 ]] || return 1
     echo 'MOCK_ADDED'
   fi
 }

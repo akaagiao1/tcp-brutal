@@ -26,9 +26,9 @@ Use `bash install.sh add IP Mbps` to add/update, `bash install.sh delete IP` to 
 
 Kernel upgrades still require rerunning installation to build the module for the new kernel; this installer does not use DKMS or automatically upgrade/reboot. Rule persistence does not rebuild modules. Container tests cover dependencies, builds and rule logic; real VPS loading/reboot/throughput remain separate verification. See [Linux CI](https://github.com/akaagiao1/tcp-brutal/actions/workflows/linux.yml) and [Chinese instructions](README.zh.md).
 
-IPv4 CIDR is supported throughout add, update, delete and boot restoration. `223.80.170.224/32` matches one address; `223.80.170.0/24` covers 256 addresses whose matching connections share the configured rate. Host bits are normalized (`223.80.170.224/24` becomes `223.80.170.0/24`). Bare IPv4 remains a /32, and legacy saved entries remain compatible.
+IPv4 CIDR is supported throughout add, update, delete and boot restoration. Bare input such as `223.80.170.224` defaults to `223.80.170.0/24`; explicitly enter `223.80.170.224/32` to match one address. Host bits are normalized. Legacy bare-IP entries already stored by older releases retain their original /32 meaning, while new entries are always saved as explicit CIDR.
 
-Example: `bash install.sh add 223.80.170.0/24 50`. Overlapping rules use longest-prefix matching; remove an old /32 explicitly if replacing it with a /24. An ISP address change is not guaranteed to remain within that subnet. /0 matches all IPv4 destinations; the script never expands a prefix automatically.
+Example: `bash install.sh add 223.80.170.224 50` saves `223.80.170.0/24`. Overlapping rules use longest-prefix matching; remove an old /32 explicitly if replacing it with a /24. An ISP address change is not guaranteed to remain within that subnet. /0 matches all IPv4 destinations.
 
 ---
 
