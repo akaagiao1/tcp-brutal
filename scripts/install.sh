@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Standalone Alpine installer: download pinned source, build and load Brutal.
+# Cross-distribution installer: download pinned source, build and load Brutal.
 set -euo pipefail
 RULES_DIR=/etc/tcp-brutal
 valid_ipv4() {
@@ -30,6 +30,11 @@ configure_rule() {
     valid_rate "$rate" && break
     echo '请输入有效的正整数，例如 50 表示 50 Mbps。'
   done
+  apply_rule "$client_ip" "$rate"
+}
+apply_rule() {
+  local client_ip=$1 rate=$2
+  valid_ipv4 "$client_ip" && valid_rate "$rate" || { echo '无效的 IPv4 或 Mbps。' >&2; return 1; }
   if ! /usr/local/bin/brutalctl add "$client_ip/32" "$rate"; then
     echo '添加失败，可能只写入了部分规则；请检查以下状态。' >&2
     /usr/local/bin/brutalctl list || true
@@ -50,10 +55,61 @@ prompt_configure() {
     return 1
   }
   if [[ -t 0 ]]; then
-    configure_rule
+    rule_menu
   else
     echo '非交互运行，跳过规则填写。稍后执行 bash install.sh configure。'
   fi
+}
+show_rules() {
+  echo '当前生效规则：'
+  /usr/local/bin/brutalctl list || return 1
+  echo '开机恢复规则（IPv4 Mbps）：'
+  if [[ -s $RULES_DIR/rules.conf ]]; then cat "$RULES_DIR/rules.conf"; else echo '（无）'; fi
+}
+delete_rule() {
+  local client_ip=$1 current tmp
+  valid_ipv4 "$client_ip" || { echo '无效的 IPv4。' >&2; return 1; }
+  current=$(/usr/local/bin/brutalctl list) || return 1
+  # Prepare the saved file before changing live state. Preserve other entries.
+  install -d -m 700 "$RULES_DIR" || return 1
+  tmp=$(mktemp "$RULES_DIR/rules.XXXXXX") || return 1
+  if [[ -f $RULES_DIR/rules.conf ]]; then
+    awk -v ip="$client_ip" '$1 != ip' "$RULES_DIR/rules.conf" > "$tmp" || { rm -f "$tmp"; return 1; }
+  fi
+  if awk -v prefix="$client_ip/32" '$1 == prefix {found=1} END {exit !found}' <<< "$current"; then
+    if ! /usr/local/bin/brutalctl del "$client_ip/32"; then
+      rm -f "$tmp"
+      echo '当前规则删除失败，保存的配置未修改。' >&2
+      return 1
+    fi
+  fi
+  chmod 600 "$tmp" && mv "$tmp" "$RULES_DIR/rules.conf" || {
+    rm -f "$tmp"
+    echo '保存文件更新失败，请检查，避免旧规则重启后恢复。' >&2
+    return 1
+  }
+  echo "已移除 $client_ip 的当前及开机规则（若存在）。已有 TCP 连接可能继续使用旧参数，请重新连接。"
+}
+prompt_delete() {
+  local client_ip
+  show_rules || return 1
+  read -r -p '要删除的客户端公网 IPv4（回车取消）：' client_ip || return 0
+  [[ -n $client_ip ]] || return 0
+  delete_rule "$client_ip"
+}
+rule_menu() {
+  local choice
+  while true; do
+    printf '\n1) 添加公网 IP / 修改已有 IP 的带宽\n2) 删除公网 IP 和带宽规则\n3) 查看当前及开机规则\n0) 退出\n'
+    read -r -p '请选择：' choice || return 0
+    case "$choice" in
+      1) configure_rule || echo '操作失败，请检查上面的错误。' ;;
+      2) prompt_delete || echo '操作失败，请检查上面的错误。' ;;
+      3) show_rules || echo '读取规则失败。' ;;
+      0|'') return 0 ;;
+      *) echo '请输入 0、1、2 或 3。' ;;
+    esac
+  done
 }
 detect_family() {
   case " $1 $2 " in
@@ -125,8 +181,8 @@ restore_rules() {
   done < $RULES_DIR/rules.conf
 }
 setup_boot() {
-  install -d /usr/local/libexec
-  install -m 755 "${BASH_SOURCE[0]}" /usr/local/libexec/tcp-brutal-manager
+  install -d /usr/local/libexec || return 1
+  install -m 755 "${BASH_SOURCE[0]}" /usr/local/libexec/tcp-brutal-manager || return 1
   if [[ $family == alpine ]]; then
     command -v rc-update >/dev/null || { echo 'OpenRC is required for boot restoration.' >&2; return 1; }
     cat > /etc/init.d/tcp-brutal-rules <<'RC'
@@ -165,26 +221,34 @@ UNIT
 save_rule() {
   local ip=$1 rate=$2 tmp
   setup_boot || return 1
-  install -d -m 700 "$RULES_DIR"
-  tmp=$(mktemp "$RULES_DIR/rules.XXXXXX")
+  install -d -m 700 "$RULES_DIR" || return 1
+  tmp=$(mktemp "$RULES_DIR/rules.XXXXXX") || return 1
   if [[ -f $RULES_DIR/rules.conf ]]; then
-    awk -v ip="$ip" '$1 != ip' $RULES_DIR/rules.conf > "$tmp"
+    awk -v ip="$ip" '$1 != ip' "$RULES_DIR/rules.conf" > "$tmp" || { rm -f "$tmp"; return 1; }
   fi
-  printf '%s %s\n' "$ip" "$rate" >> "$tmp"
-  chmod 600 "$tmp"
-  mv "$tmp" $RULES_DIR/rules.conf
+  printf '%s %s\n' "$ip" "$rate" >> "$tmp" || { rm -f "$tmp"; return 1; }
+  chmod 600 "$tmp" && mv "$tmp" "$RULES_DIR/rules.conf" || { rm -f "$tmp"; return 1; }
 }
 main() {
-  local action=${1:-install} family rpm_manager kernel major rest minor
+  local action=${1:-auto} family rpm_manager kernel major rest minor
   case "$action" in
-    help|-h|--help) echo 'Usage: bash install.sh [install|tools|configure|restore]'; return ;;
-    install|tools|configure|restore) ;;
+    help|-h|--help) echo 'Usage: bash install.sh [install|tools|configure|menu|list|add IP Mbps|delete IP|restore]'; return ;;
+    auto|install|tools|configure|menu|list|add|delete|restore) ;;
     *) echo 'Unknown action. Use --help.' >&2; return 2 ;;
   esac
   [[ $(uname -s) == Linux && $EUID == 0 ]] || { echo 'Run as root on Linux.' >&2; return 1; }
   export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   . /etc/os-release
   family=$(detect_family "$ID" "${ID_LIKE:-}") || { echo 'Unsupported distribution.' >&2; return 1; }
+  if [[ $action == auto ]]; then
+    if [[ -x /usr/local/bin/brutalctl && -r /proc/net/tcp_brutal/rules ]]; then action=menu; else action=install; fi
+  fi
+  case "$action" in
+    add) [[ $# == 3 ]] || { echo 'Usage: bash install.sh add IP Mbps'; return 2; }; apply_rule "$2" "$3"; return ;;
+    delete) [[ $# == 2 ]] || { echo 'Usage: bash install.sh delete IP'; return 2; }; delete_rule "$2"; return ;;
+    list) show_rules; return ;;
+    menu) prompt_configure; return ;;
+  esac
   if [[ $action == restore ]]; then restore_rules; return; fi
   if [[ $action == configure ]]; then prompt_configure; return; fi
   kernel=$(uname -r); major=${kernel%%.*}; rest=${kernel#*.}; minor=${rest%%.*}

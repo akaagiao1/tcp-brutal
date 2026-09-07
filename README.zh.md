@@ -33,13 +33,29 @@ bash install.sh
 
 ```sh
 bash install.sh tools      # 只补装工具，随后提示填写规则
-bash install.sh configure  # 已安装后添加/更新规则并保存
+bash install.sh configure  # 打开规则管理菜单
 brutalctl list
 ```
 
-同一 IP 重复配置会更新速率，不同 IP 会保留多条规则。回车跳过填写；非交互运行跳过填写。添加后重新连接代理。
+已安装后直接运行 `bash install.sh` 会进入菜单，不再重复安装依赖：
 
-### 开机恢复与删除规则
+1. 添加公网 IP / 修改已有 IP 的带宽
+2. 删除公网 IP 和带宽规则
+3. 查看当前及开机规则
+0. 退出
+
+同一 IP 重复添加会更新带宽，不同 IP 可以保留多条规则。删除会同时移除当前规则和保存的配置，防止重启后恢复旧 IP。删除规则不会强制断开已有 TCP 连接；请重新连接代理。
+
+也可以直接使用命令（不需菜单）：
+
+```sh
+bash install.sh add 223.80.170.224 50
+bash install.sh add 223.80.170.224 40  # 将该 IP 改为 40 Mbps
+bash install.sh delete 223.80.170.224
+bash install.sh list
+```
+
+### 开机恢复
 
 ```sh
 # Debian / Ubuntu / CentOS / RHEL 系
@@ -48,7 +64,7 @@ systemctl status tcp-brutal-rules
 rc-service tcp-brutal-rules status
 ```
 
-客户端公网 IP 变化时，使用 `brutalctl del 旧IP/32` 删除当前旧规则，并编辑 `/etc/tcp-brutal/rules.conf` 删除旧 IP 那一行，再配置新 IP。每行是 `IPv4 Mbps`，不是 shell 命令。
+公网 IP 变化时，删除旧 IP，再添加新 IP。规则保存在 `/etc/tcp-brutal/rules.conf`，每行是 `IPv4 Mbps`。菜单同时显示当前生效规则与开机保存规则。
 
 旧版手动添加的 `/etc/local.d/brutal-rules.start` 不会被脚本删除；迁移完成后请检查并移除其中重复的 Brutal 规则，避免两个入口重复应用旧值。
 
