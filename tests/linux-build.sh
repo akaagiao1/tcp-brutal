@@ -20,8 +20,11 @@ case "$family" in
 esac
 for build in /lib/modules/*/build /usr/src/kernels/*; do
   [[ -f $build/Makefile ]] || continue
-  make KERNEL_DIR="$build" clean
-  make KERNEL_DIR="$build"
+  # Run outside the source directory to catch PWD-sensitive installer bugs.
+  (cd /tmp && src=/src build="$build" bash -c '
+    (cd "$src" && make KERNEL_DIR="$build" clean)
+    (cd "$src" && make KERNEL_DIR="$build")
+  ')
   test -s brutal.ko
   modinfo ./brutal.ko
   exit 0

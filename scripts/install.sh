@@ -188,7 +188,7 @@ install_module() {
   [[ $(cat "$build/include/config/kernel.release") == "$kernel" ]] || {
     echo 'Kernel development version mismatch; do not create fake symlinks.' >&2; return 1;
   }
-  make -C "$src" KERNEL_DIR="$build" clean
+  (cd "$src" && make KERNEL_DIR="$build" clean)
   (cd "$src" && make KERNEL_DIR="$build")
   [[ $(modinfo -F vermagic "$src/brutal.ko" | cut -d ' ' -f 1) == "$kernel" ]] || return 1
   install -d "/lib/modules/$kernel/extra"
