@@ -12,15 +12,18 @@ done
 # Mock only the command, so no route or host configuration is changed.
 /usr/local/bin/brutalctl() {
   if [[ $1 == add ]]; then
-    [[ $2 == 223.80.170.0/24 && $3 == 50 ]] || return 1
+    case "$2 $3" in
+      '223.80.170.0/24 50'|'0.0.0.0/0 50') ;;
+      *) return 1 ;;
+    esac
     echo 'MOCK_ADDED'
   fi
 }
 save_rule() { :; }
 result=$(configure_rule <<< $'invalid\n223.80.170.224\n0\n50')
 [[ $result == *MOCK_ADDED* ]]
-result=$(configure_rule <<< '')
-[[ $result != *MOCK_ADDED* ]]
+result=$(configure_rule <<< $'\n50')
+[[ $result == *MOCK_ADDED* && $result == *'0.0.0.0/0'* ]]
 /usr/local/bin/brutalctl() { return 1; }
 if configure_rule <<< $'223.80.170.224\n50'; then exit 1; fi
 echo 'Alpine input and rule flow tests passed.'

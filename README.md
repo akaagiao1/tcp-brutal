@@ -20,7 +20,7 @@ bash install.sh
 
 Installs the module, brutalctl and full iproute tools. A loaded v2 module is reused. Successful installation prompts for client public IPv4 or CIDR and Mbps, applies the rule, and saves it in `/etc/tcp-brutal/rules.conf`. OpenRC (Alpine) or systemd restores saved rules at boot. Run the new configuration step once to save rules from older installations.
 
-Use `bash install.sh tools` to repair tools, or `bash install.sh configure` to open the rule menu. With the module and tool already available, running without arguments opens the menu instead of reinstalling. Enter skips prompts; unattended execution skips configuration. Same-IP entries update, other entries are retained. Reconnect clients after adding rules.
+Use `bash install.sh tools` to repair tools, or `bash install.sh configure` to open the rule menu. With the module and tool already available, running without arguments opens the menu instead of reinstalling. The interactive add prompt defaults to `0.0.0.0/0`; press Enter at the target prompt, then enter Mbps. This applies one shared rate to all matching IPv4 TCP destinations and is intended for a VPS dedicated to one user. Unattended execution skips configuration. Reconnect clients after adding rules.
 
 Use `bash install.sh add IP Mbps` to add/update, `bash install.sh delete IP` to remove both the live and saved rule, and `bash install.sh list` to view both. The menu provides the same operations. Deleting does not interrupt existing TCP connections; reconnect to stop using their old parameters. Check for duplicate rules in an older manually created `/etc/local.d/brutal-rules.start` when migrating. Service: `tcp-brutal-rules` (systemctl / rc-service).
 
@@ -29,6 +29,8 @@ Kernel upgrades still require rerunning installation to build the module for the
 IPv4 CIDR is supported throughout add, update, delete and boot restoration. Bare input such as `223.80.170.224` defaults to `223.80.170.0/24`; explicitly enter `223.80.170.224/32` to match one address. Host bits are normalized. Legacy bare-IP entries already stored by older releases retain their original /32 meaning, while new entries are always saved as explicit CIDR.
 
 Example: `bash install.sh add 223.80.170.224 50` saves `223.80.170.0/24`. Overlapping rules use longest-prefix matching; remove an old /32 explicitly if replacing it with a /24. An ISP address change is not guaranteed to remain within that subnet. /0 matches all IPv4 destinations.
+
+The `/0` value is the interactive default only. Bare IPv4 passed to the direct `add` command still becomes `/24`. Remove the default rule with `bash install.sh delete 0.0.0.0/0`.
 
 ---
 

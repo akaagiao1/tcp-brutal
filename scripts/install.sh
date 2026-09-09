@@ -46,10 +46,10 @@ valid_rate() {
 }
 configure_rule() {
   local client_ip rate
-  echo '配置 TCP Brutal：填写客户端公网 IPv4 或 CIDR 网段，不是 VPS IP。网段内连接共享所填带宽。'
+  echo '配置 TCP Brutal：默认匹配全部 IPv4（0.0.0.0/0），所有匹配连接共享所填带宽。'
   while true; do
-    read -r -p '客户端公网 IPv4 或网段（回车跳过）：' client_ip || return 0
-    [[ -n $client_ip ]] || return 0
+    read -r -p '目标 IPv4 或网段 [0.0.0.0/0]：' client_ip || return 0
+    client_ip=${client_ip:-0.0.0.0/0}
     normalize_prefix "$client_ip" >/dev/null && break
     echo '格式错误，例如 223.80.170.224 或 223.80.170.0/24；前缀长度为 0–32。'
   done
