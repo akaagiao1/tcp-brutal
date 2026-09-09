@@ -108,11 +108,11 @@ static int route_lookup(const char *prefix, char *via, size_t vsize, char *dev, 
     return dev[0] ? 0 : -1;
 }
 
-static int route_add(const char *prefix, int lock)
+static int route_add_one(const char *prefix, const char *probe, int lock)
 {
     char via[64], dev[32];
     char *argv[16];
-    int n = 0, r = route_lookup(prefix, via, sizeof(via), dev, sizeof(dev));
+    int n = 0, r = route_lookup(probe, via, sizeof(via), dev, sizeof(dev));
 
     if (r)
     {
@@ -147,8 +147,38 @@ static int route_add(const char *prefix, int lock)
     return 0;
 }
 
+static int route_add(const char *prefix, int lock)
+{
+    if (!strcmp(prefix, "0.0.0.0/0"))
+    {
+        /* A lookup for 0.0.0.0 is commonly treated as local or unroutable.
+         * Install two more-specific routes instead of replacing the system's
+         * default route, preserving its ownership, metric and other options. */
+        if (route_add_one("0.0.0.0/1", "1.1.1.1", lock))
+            return 1;
+        if (route_add_one("128.0.0.0/1", "128.0.0.1", lock))
+        {
+            char *rollback[] = {"ip", "-4", "route", "del", "0.0.0.0/1", "proto", ROUTE_PROTO, NULL};
+
+            run(rollback, NULL, 0, 1);
+            return 1;
+        }
+        return 0;
+    }
+    return route_add_one(prefix, prefix, lock);
+}
+
 static void route_del(const char *prefix)
 {
+    if (!strcmp(prefix, "0.0.0.0/0"))
+    {
+        char *lower[] = {"ip", "-4", "route", "del", "0.0.0.0/1", "proto", ROUTE_PROTO, NULL};
+        char *upper[] = {"ip", "-4", "route", "del", "128.0.0.0/1", "proto", ROUTE_PROTO, NULL};
+
+        run(lower, NULL, 0, 1);
+        run(upper, NULL, 0, 1);
+        return;
+    }
     char *argv[] = {"ip", ip_family(prefix), "route", "del", (char *)prefix, "proto", ROUTE_PROTO, NULL};
 
     run(argv, NULL, 0, 1); /* may not exist (noroute) */
@@ -164,22 +194,34 @@ static void route_flush(void)
 }
 
 /* Does the list of brutalctl routes contain dst ("addr/len")? */
-static int route_present(const char *dst, char *routes)
+static int route_present_one(const char *dst, const char *routes)
 {
-    char canon[80], *line, *save;
+    char canon[80];
+    const char *line = routes;
     const char *slash = strchr(dst, '/');
 
-    for (line = strtok_r(routes, "\n", &save); line; line = strtok_r(NULL, "\n", &save))
+    while (*line)
     {
-        size_t n = strcspn(line, " ");
+        size_t n = strcspn(line, " \n");
 
         snprintf(canon, sizeof(canon), "%.*s", (int)n, line);
         if (!strchr(canon, '/') && slash) /* ip prints host routes without /len */
             snprintf(canon + n, sizeof(canon) - n, "/%d", strchr(canon, ':') ? 128 : 32);
         if (!strcmp(canon, dst))
             return 1;
+        line += strcspn(line, "\n");
+        if (*line == '\n')
+            line++;
     }
     return 0;
+}
+
+static int route_present(const char *dst, const char *routes)
+{
+    if (!strcmp(dst, "0.0.0.0/0"))
+        return route_present_one("0.0.0.0/1", routes) &&
+               route_present_one("128.0.0.0/1", routes);
+    return route_present_one(dst, routes);
 }
 
 static int open_rules(int flags)
@@ -267,8 +309,6 @@ static int list_rules(void)
            "DESTINATION", "RATE(Mbps)", "GAIN", "LOCK", "ROUTE", "ID", "MEMBERS", "SENT(MB)");
     while (fgets(line, sizeof(line), f))
     {
-        char copy[sizeof(routes)];
-
         field(line, "dst", dst, sizeof(dst));
         field(line, "rate", rate, sizeof(rate));
         field(line, "gain", gain, sizeof(gain));
@@ -276,10 +316,9 @@ static int list_rules(void)
         field(line, "id", id, sizeof(id));
         field(line, "members", members, sizeof(members));
         field(line, "sent", sent, sizeof(sent));
-        memcpy(copy, routes, sizeof(copy));
         printf("%-30s %11.2f %5s %5s %6s %4s %8s %10.1f\n",
                dst, strtoull(rate, NULL, 10) * 8 / 1e6, gain,
-               strcmp(lock, "1") ? "no" : "yes", route_present(dst, copy) ? "yes" : "no",
+               strcmp(lock, "1") ? "no" : "yes", route_present(dst, routes) ? "yes" : "no",
                id, members, strtoull(sent, NULL, 10) / 1e6);
     }
     fclose(f);

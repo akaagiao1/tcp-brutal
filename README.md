@@ -22,6 +22,8 @@ Installs the module, brutalctl and full iproute tools. A loaded v2 module is reu
 
 Use `bash install.sh tools` to repair tools, or `bash install.sh configure` to open the rule menu. With the module and tool already available, running without arguments opens the menu instead of reinstalling. The interactive add prompt defaults to `0.0.0.0/0`; press Enter at the target prompt, then enter Mbps. This applies one shared rate to all matching IPv4 TCP destinations and is intended for a VPS dedicated to one user. Unattended execution skips configuration. Reconnect clients after adding rules.
 
+The `/0` rule is implemented with managed `0.0.0.0/1` and `128.0.0.0/1` routes, covering all IPv4 without replacing the system-owned default route. `brutalctl list` should report `ROUTE yes` for `/0`; `ROUTE no` means the rule is not selecting Brutal for connections.
+
 Use `bash install.sh add IP Mbps` to add/update, `bash install.sh delete IP` to remove both the live and saved rule, and `bash install.sh list` to view both. The menu provides the same operations. Deleting does not interrupt existing TCP connections; reconnect to stop using their old parameters. Check for duplicate rules in an older manually created `/etc/local.d/brutal-rules.start` when migrating. Service: `tcp-brutal-rules` (systemctl / rc-service).
 
 Kernel upgrades still require rerunning installation to build the module for the new kernel; this installer does not use DKMS or automatically upgrade/reboot. Rule persistence does not rebuild modules. Container tests cover dependencies, builds and rule logic; real VPS loading/reboot/throughput remain separate verification. See [Linux CI](https://github.com/akaagiao1/tcp-brutal/actions/workflows/linux.yml) and [Chinese instructions](README.zh.md).
