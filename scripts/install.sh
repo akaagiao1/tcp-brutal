@@ -193,8 +193,16 @@ install_module() {
   [[ $(modinfo -F vermagic "$src/brutal.ko" | cut -d ' ' -f 1) == "$kernel" ]] || return 1
   install -d "/lib/modules/$kernel/extra"
   install -m 644 "$src/brutal.ko" "/lib/modules/$kernel/extra/brutal.ko"
+  # An older DKMS copy under updates/dkms otherwise takes precedence over
+  # extra/. Keep it for rollback, but make depmod select this v2 module.
+  install -d /etc/depmod.d
+  printf 'override brutal * extra\n' > /etc/depmod.d/tcp-brutal.conf
   depmod -a "$kernel"
   modprobe brutal
+  [[ -r /sys/module/brutal/version && $(cat /sys/module/brutal/version) == 2.* ]] || {
+    echo 'The module loaded, but it is not Brutal v2. Check modinfo -n brutal.' >&2
+    return 1
+  }
   install -d /etc/modules-load.d
   echo brutal > /etc/modules-load.d/brutal.conf
   echo 'Module installed. After a kernel upgrade, rerun installation for the new kernel.'

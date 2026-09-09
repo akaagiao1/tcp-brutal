@@ -89,6 +89,8 @@ rc-service tcp-brutal-rules status
 
 模块按当前内核编译，开发文件必须完全匹配：Alpine 使用 linux-virt-dev / linux-lts-dev，Debian 系使用 linux-headers-当前版本，RHEL 系使用 kernel-devel-当前版本。仓库找不到匹配版本时，先更新内核和开发包、重启再安装，不要创建假软链接。脚本不自动升级内核或重启。
 
+如果系统曾通过 DKMS 安装 Brutal v1，旧模块通常位于 `updates/dkms`，会优先于新版的 `extra`。安装器会写入 `/etc/depmod.d/tcp-brutal.conf`，让系统选择新版，同时保留旧文件以便回退，并在加载后验证版本必须为 2.x。
+
 **内核升级后仍需要重新运行安装脚本编译模块**；规则持久化不能替代为新内核编译模块。本入口不依赖 DKMS，不自动重建模块。系统启动服务不可用时会明确报错，不会声称规则已持久化。
 
 验证覆盖：输入校验、保存/更新/恢复规则和发行版依赖/编译检查；容器检查不能替代目标 VPS 的模块加载、重启和吞吐验证。参见 [Linux 检查](https://github.com/akaagiao1/tcp-brutal/actions/workflows/linux.yml)。
