@@ -293,7 +293,7 @@ main() {
   scratch=$(mktemp -d)
   trap 'rm -rf "$scratch"' EXIT
   # Pin a reviewed source revision that includes safe 0.0.0.0/0 route support.
-  local commit=45835abca0f4f510f8e668e417c343e269339349
+  local commit=45835abfe3cc475d10a7d58f180c8ee80e4f5ced
   curl -fL --retry 3 "https://github.com/akaagiao1/tcp-brutal/archive/$commit.tar.gz" -o "$scratch/source.tar.gz"
   tar -xzf "$scratch/source.tar.gz" -C "$scratch"
   src="$scratch/tcp-brutal-$commit"
