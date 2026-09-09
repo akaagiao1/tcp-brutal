@@ -292,7 +292,8 @@ main() {
   packages curl ca-certificates tar gzip
   scratch=$(mktemp -d)
   trap 'rm -rf "$scratch"' EXIT
-  local commit=377d2a0e9324ef585ff90ea91779baf276cf6a50
+  # Pin a reviewed source revision that includes safe 0.0.0.0/0 route support.
+  local commit=45835abca0f4f510f8e668e417c343e269339349
   curl -fL --retry 3 "https://github.com/akaagiao1/tcp-brutal/archive/$commit.tar.gz" -o "$scratch/source.tar.gz"
   tar -xzf "$scratch/source.tar.gz" -C "$scratch"
   src="$scratch/tcp-brutal-$commit"
