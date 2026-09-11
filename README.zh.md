@@ -40,7 +40,7 @@ brutalctl list
 已安装后直接运行 `bash install.sh` 会进入菜单，不再重复安装依赖：
 
 1. 添加公网 IP/网段或修改带宽
-2. 删除公网 IP/网段和带宽规则
+2. 按序号删除规则，输入 0 删除全部规则
 3. 查看当前及开机规则
 0. 退出
 
@@ -54,6 +54,7 @@ brutalctl list
 bash install.sh add 223.80.170.224 50
 bash install.sh add 223.80.170.224 40  # 将该 IP 改为 40 Mbps
 bash install.sh delete 223.80.170.224
+bash install.sh delete 0              # 删除全部当前及开机规则
 bash install.sh list
 ```
 

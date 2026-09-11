@@ -119,12 +119,69 @@ delete_rule() {
   }
   echo "已移除 $client_ip 的当前及开机规则（若存在）。已有 TCP 连接可能继续使用旧参数，请重新连接。"
 }
+delete_all_rules() {
+  local tmp
+  install -d -m 700 "$RULES_DIR" || return 1
+  tmp=$(mktemp "$RULES_DIR/rules.XXXXXX") || return 1
+  chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
+  if ! /usr/local/bin/brutalctl flush; then
+    rm -f "$tmp"
+    echo '当前规则清空失败，开机配置未修改。' >&2
+    return 1
+  fi
+  if ! mv "$tmp" "$RULES_DIR/rules.conf"; then
+    rm -f "$tmp"
+    echo '当前规则已清空，但保存文件更新失败，请手动检查。' >&2
+    return 1
+  fi
+  echo '已删除全部当前规则和开机恢复规则。已有 TCP 连接可能继续使用旧参数，请重新连接。'
+}
+collect_rule_prefixes() {
+  local prefix rate extra canonical seen=''
+  while read -r prefix rate extra; do
+    canonical=$(normalize_prefix "$prefix") || continue
+    if [[ $'\n'$seen$'\n' != *$'\n'"$canonical"$'\n'* ]]; then
+      printf '%s\n' "$canonical"
+      seen+="${seen:+$'\n'}$canonical"
+    fi
+  done < <(/usr/local/bin/brutalctl list 2>/dev/null | tail -n +2)
+  if [[ -f $RULES_DIR/rules.conf ]]; then
+    while read -r prefix rate extra; do
+      canonical=$(normalize_saved_prefix "$prefix") || continue
+      if [[ $'\n'$seen$'\n' != *$'\n'"$canonical"$'\n'* ]]; then
+        printf '%s\n' "$canonical"
+        seen+="${seen:+$'\n'}$canonical"
+      fi
+    done < "$RULES_DIR/rules.conf"
+  fi
+}
 prompt_delete() {
-  local client_ip
+  local selection index prefix
+  local -a prefixes=()
   show_rules || return 1
-  read -r -p '要删除的客户端公网 IPv4 或网段（回车取消）：' client_ip || return 0
-  [[ -n $client_ip ]] || return 0
-  delete_rule "$client_ip"
+  while read -r prefix; do
+    [[ -n $prefix ]] && prefixes[${#prefixes[@]}]=$prefix
+  done < <(collect_rule_prefixes)
+  if ((${#prefixes[@]} == 0)); then
+    echo '没有可删除的规则。'
+    return 0
+  fi
+  echo '请选择要删除的规则：'
+  for index in "${!prefixes[@]}"; do
+    printf '%d) %s\n' "$((index + 1))" "${prefixes[$index]}"
+  done
+  echo '0) 删除全部规则'
+  read -r -p '请输入序号（回车取消）：' selection || return 0
+  [[ -n $selection ]] || return 0
+  [[ $selection =~ ^[0-9]+$ ]] || { echo '请输入列表中的数字序号。' >&2; return 1; }
+  if ((10#$selection == 0)); then
+    delete_all_rules
+  elif ((10#$selection >= 1 && 10#$selection <= ${#prefixes[@]})); then
+    delete_rule "${prefixes[$((10#$selection - 1))]}"
+  else
+    echo '序号超出范围。' >&2
+    return 1
+  fi
 }
 rule_menu() {
   local choice
@@ -270,7 +327,7 @@ save_rule() {
 main() {
   local action=${1:-auto} family rpm_manager kernel major rest minor
   case "$action" in
-    help|-h|--help) echo 'Usage: bash install.sh [install|tools|configure|menu|list|add IP/CIDR Mbps|delete IP|restore]'; return ;;
+    help|-h|--help) echo 'Usage: bash install.sh [install|tools|configure|menu|list|add IP/CIDR Mbps|delete IP/CIDR|delete 0|restore]'; return ;;
     auto|install|tools|configure|menu|list|add|delete|restore) ;;
     *) echo 'Unknown action. Use --help.' >&2; return 2 ;;
   esac
@@ -283,7 +340,7 @@ main() {
   fi
   case "$action" in
     add) [[ $# == 3 ]] || { echo 'Usage: bash install.sh add IP/CIDR Mbps'; return 2; }; apply_rule "$2" "$3"; return ;;
-    delete) [[ $# == 2 ]] || { echo 'Usage: bash install.sh delete IP/CIDR'; return 2; }; delete_rule "$2"; return ;;
+    delete) [[ $# == 2 ]] || { echo 'Usage: bash install.sh delete IP/CIDR|0'; return 2; }; [[ $2 == 0 ]] && delete_all_rules || delete_rule "$2"; return ;;
     list) show_rules; return ;;
     menu) prompt_configure; return ;;
   esac
