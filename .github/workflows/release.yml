@@ -42,6 +42,7 @@ jobs:
           files: build/*
 
       - name: Publish to API
+        if: github.repository == 'HyNetworks/tcp-brutal'
         env:
           HY2_API_POST_KEY: ${{ secrets.HY2_API_POST_KEY }}
         run: |

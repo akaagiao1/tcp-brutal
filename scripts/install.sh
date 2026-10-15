@@ -245,6 +245,14 @@ install_module() {
   [[ $(cat "$build/include/config/kernel.release") == "$kernel" ]] || {
     echo 'Kernel development version mismatch; do not create fake symlinks.' >&2; return 1;
   }
+  local config
+  for config in "$build/include/config/auto.conf" "$build/.config"; do
+    [[ -f $config ]] || continue
+    if grep -q '^CONFIG_CC_IS_CLANG=y' "$config"; then
+      packages clang lld llvm
+    fi
+    break
+  done
   (cd "$src" && make KERNEL_DIR="$build" clean)
   (cd "$src" && make KERNEL_DIR="$build")
   [[ $(modinfo -F vermagic "$src/brutal.ko" | cut -d ' ' -f 1) == "$kernel" ]] || return 1
@@ -358,7 +366,7 @@ main() {
   scratch=$(mktemp -d)
   trap 'rm -rf "$scratch"' EXIT
   # Pin a reviewed source revision that includes safe 0.0.0.0/0 route support.
-  local commit=45835abfe3cc475d10a7d58f180c8ee80e4f5ced
+  local commit=3784f6d1aa3c86579a124405da90b84c2b70d645
   curl -fL --retry 3 "https://github.com/akaagiao1/tcp-brutal/archive/$commit.tar.gz" -o "$scratch/source.tar.gz"
   tar -xzf "$scratch/source.tar.gz" -C "$scratch"
   src="$scratch/tcp-brutal-$commit"
