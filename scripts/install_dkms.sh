@@ -347,6 +347,37 @@ check_linux_headers() {
   fi
 }
 
+# A clang-built kernel (CONFIG_CC_IS_CLANG) needs clang, lld and llvm to build modules
+is_clang_kernel() {
+  local _build="/lib/modules/$(uname -r)/build"
+  local _config
+
+  for _config in "$_build/include/config/auto.conf" "$_build/.config" "/boot/config-$(uname -r)"; do
+    if [[ -f "$_config" ]]; then
+      if grep -q '^CONFIG_CC_IS_CLANG=y' "$_config"; then
+        return 0
+      fi
+      return 1
+    fi
+  done
+  return 1
+}
+
+check_llvm_toolchain() {
+  if ! is_clang_kernel; then
+    return
+  fi
+  echo -n "Checking LLVM toolchain (kernel built with clang) ... "
+  if has_command clang && has_command ld.lld && has_command llvm-objcopy; then
+    echo "ok"
+    return
+  fi
+  echo "not installed"
+  install_software clang
+  install_software lld
+  install_software llvm
+}
+
 check_environment() {
   check_environment_operating_system
   check_environment_curl
@@ -646,6 +677,20 @@ install_libc_headers() {
   detect_package_manager && $PACKAGE_MANAGEMENT_INSTALL "$_package"
 }
 
+# Kernel headers may pull in only a versioned compiler (e.g. gcc-14 on Debian
+# 13) or clang (clang-built kernels), without the cc and gcc commands.
+find_c_compiler() {
+  local _cc
+
+  for _cc in cc gcc $(compgen -c gcc- | grep -E '^gcc-[0-9]+$' | sort -Vru) clang; do
+    if has_command "$_cc"; then
+      echo "$_cc"
+      return 0
+    fi
+  done
+  return 1
+}
+
 brutalctl_install() {
   local _version="$(dkms_get_installed_versions "$DKMS_MODULE_NAME" | head -1)"
   local _source="/usr/src/$DKMS_MODULE_NAME-${_version#v}/tools/brutalctl.c"
@@ -655,13 +700,13 @@ brutalctl_install() {
     echo "Installing brutalctl to $BRUTALCTL_PATH ... skipped (not part of $_version)"
     return
   fi
-  if has_command cc; then
-    _cc="cc"
-  elif has_command gcc; then
-    _cc="gcc"
-  else
-    echo "Installing brutalctl to $BRUTALCTL_PATH ... skipped (no C compiler)"
-    return
+  if ! _cc="$(find_c_compiler)"; then
+    echo "Installing missing dependence 'gcc' ... "
+    detect_package_manager && $PACKAGE_MANAGEMENT_INSTALL gcc
+    if ! _cc="$(find_c_compiler)"; then
+      warning "No C compiler found, brutalctl is not installed. The kernel module is not affected."
+      return
+    fi
   fi
   install_libc_headers "$_cc" || true
   echo -n "Installing brutalctl to $BRUTALCTL_PATH ... "
@@ -883,6 +928,8 @@ perform_install() {
     # clean auto downloaded tarball
     rm -f "$_local_file"
   fi
+
+  check_llvm_toolchain
 
   echo "Rebuilding DKMS modules as needed ... "
   if ! dkms autoinstall; then
