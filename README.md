@@ -40,6 +40,8 @@ The `/0` value is the interactive default only. Bare IPv4 passed to the direct `
 
 > **New in v2:** TCP Brutal no longer needs special support from the application. Set a rate for a destination once, and every connection to it uses Brutal, any program, any TCP-based protocol. Stop waiting and use it right now!
 
+https://github.com/user-attachments/assets/26c5ab0d-759b-4499-a891-c533a8b975ce
+
 ## Quick start
 
 ### Upstream installer (other distributions)
